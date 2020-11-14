@@ -2,9 +2,26 @@
 
 from PIL import ImageFont, Image
 import struct
+import argparse
+import logging
 
-filename = "LiberationSans-Regular.ttf"
-fontsize = 20
+parser = argparse.ArgumentParser()
+parser.add_argument("-f", "--font", default="LiberationSans-Regular.ttf", help="Fontfile Default:LiberationSans-Regular.ttf")
+parser.add_argument("-s", "--size", type=int, default=20, help="Fontsize Default:20")
+parser.add_argument("-v", "--verbose", action='count', default=0)
+
+args = parser.parse_args()
+
+logging.basicConfig(format="%(asctime)s <%(name)-50s> [%(levelname)-10s] %(message)s")
+logging.addLevelName(logging.DEBUG - 1, "DEBUG - 1")
+logging.addLevelName(logging.DEBUG - 2, "DEBUG - 2")
+logging.addLevelName(logging.DEBUG - 3, "DEBUG - 3")
+logger = logging.getLogger('Font Generator')
+logger.setLevel(logging.DEBUG - 3)
+
+
+filename = args.font
+fontsize = args.size
 
 
 fName, fSuffix = filename.split(".")
