@@ -1,28 +1,37 @@
-#!/usr/bin/python3
+#!/usr/bin/python3.7
 
 from PIL import ImageFont, Image
 import struct
 import argparse
 import logging
+import ColoredLogger
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-f", "--font", default="LiberationSans-Regular.ttf", help="Fontfile Default:LiberationSans-Regular.ttf")
 parser.add_argument("-s", "--size", type=int, default=20, help="Fontsize Default:20")
-parser.add_argument("-v", "--verbose", action='count', default=0)
+parser.add_argument("-o", "--output", default='bin', choices=['bin','hex','c'], help="Output format")
+
+parser.add_argument("-v", "--verbose", action='count', default=0, help="increase verbosity")
+parser.add_argument("-q", "--quieter", action='count', default=0, help="decrease verbosity")
+parser.add_argument("--quiet", action='store_true', help="do not print anything")
 
 args = parser.parse_args()
 
-logging.basicConfig(format="%(asctime)s <%(name)-50s> [%(levelname)-10s] %(message)s")
-logging.addLevelName(logging.DEBUG - 1, "DEBUG - 1")
-logging.addLevelName(logging.DEBUG - 2, "DEBUG - 2")
-logging.addLevelName(logging.DEBUG - 3, "DEBUG - 3")
+logging.setLoggerClass(ColoredLogger.ColoredLogger)
 logger = logging.getLogger('Font Generator')
-logger.setLevel(logging.DEBUG - 3)
+logger.setLevel(logging.INFO - (args.verbose * 10) + (args.quieter * 10))
+if args.quiet:
+    logger.disabled = 1
+    logger.setLevel(logging.CRITICAL + 10)
+
+
 
 
 filename = args.font
 fontsize = args.size
 
+
+logger.info(f"Using '{filename}' at size {fontsize}")
 
 fName, fSuffix = filename.split(".")
 
@@ -39,11 +48,6 @@ fontInfo = {
     "filePath" : font.path
 }
 
-
-print(fontInfo)
-
-
-
 #print(h)
 def font2bitBuffer(font, char):
     w, h = font.getsize(char)
@@ -54,7 +58,7 @@ def font2bitBuffer(font, char):
 
     cw, ch = mask.size
 
-    print(cw, ch, x, y, w,h)
+    logger.debug(cw, ch, x, y, w,h)
 
     bitBuffer = [[0]*h for i in range(w)]
     for i in range(ch):
@@ -287,21 +291,21 @@ def unpackMetadata(fontFile):
     valStart = keyStart+lenKey
     key = fontFile[keyStart:keyStart+lenKey].decode("utf8")
     val = fontFile[valStart:valStart+lenVal].decode("utf8")
-    print("Next Metadatum at Offset %3d key=%-20s val=%s" % (nextOffset, key, val))
+    logger.info("Next Metadatum at Offset %3d key=%-20s val=%s" % (nextOffset, key, val))
     if nextOffset:
         unpackMetadata(fontFile[nextOffset:])
 
 def unpackGlyphTable(fontFile, height):
     nextOffset, start, end, dataOffset = struct.unpack_from("<iiii", fontFile)
-    print("Table from %3i to %3i. Next offset %i. Data at %i" % (start, end, nextOffset, dataOffset))
+    logger.info("Table from %3i to %3i. Next offset %i. Data at %i" % (start, end, nextOffset, dataOffset))
     for char in range(start, end + 1):
         offset = struct.unpack_from("<i", fontFile, (char - start)*4 + 16)[0]
         length = struct.unpack_from("<i", fontFile, dataOffset + offset)[0]
         width, flags = struct.unpack_from("<BB", fontFile, dataOffset + offset + 4)
         dataStart = dataOffset + offset + 6
         data = fontFile[dataStart:dataStart + length]
-        print("Glyph for %3i '%c' offset %5i length %3i width %2i, flags %02X" % (char, char, offset, length, width, flags))
-        print(data)
+        logger.info("Glyph for %3i '%c' offset %5i length %3i width %2i, flags %02X" % (char, char, offset, length, width, flags))
+        logger.debug(data)
         if flags & 0x80:
             #print(data)
             data = rleDecompress(data)    
@@ -313,25 +317,42 @@ def unpackGlyphTable(fontFile, height):
 
 
 def unpackFontFile(fontFile):
-     height, metadataOffset, glyphTableOffset = struct.unpack("<iii", fontFile[:12])
-     print("Height: %d" % height)
-     print("Metadata at Offset %d" % metadataOffset)
-     print("Glyph Table at Offset %d" % glyphTableOffset)
-     unpackMetadata(fontFile[12+metadataOffset:])
-     unpackGlyphTable(fontFile[12+glyphTableOffset:], height)
+    height, metadataOffset, glyphTableOffset = struct.unpack("<iii", fontFile[:12])
+    logger.info("Height: %d" % height)
+    logger.info("Metadata at Offset %d" % metadataOffset)
+    logger.info("Glyph Table at Offset %d" % glyphTableOffset)
+    unpackMetadata(fontFile[12+metadataOffset:])
+    unpackGlyphTable(fontFile[12+glyphTableOffset:], height)
 
-char = "Ä"
+
+def checksum(data):
+    if len(data) == 0:
+        return 0
+    chksum = 0
+    for x in range(0, len(data) - 1, 2):
+        chksum += int(data[x:x+2], 16)
+    chksum = int(("%2X" % chksum)[-2:], 16)
+    return (255 - chksum) + 1
 
 fontFileImage = packFontFile(font, fontInfo)
 
-print("\nSize of Font File: %d Bytes\n\n" % len(fontFileImage))
+logger.info(f"Size of Font: {len(fontFileImage)} Bytes")
 
-unpackFontFile(fontFileImage)
+#unpackFontFile(fontFileImage)
 
-with open("test.bin", "wb") as f:
-    f.write(fontFileImage)
-    f.flush()
-    f.close()
+output_filename = f"{fName}-{fontsize}"
+
+if args.output == "bin":
+    with open(f"{output_filename}.bin", "wb") as f:
+        f.write(fontFileImage)
+        f.flush()
+        f.close()
+elif args.output == "bin":
+    with open(f"{output_filename}.hex", "w") as f:
+
+        f.write(":00000001FF")
+        f.flush()
+        f.close()
 
 #print(l, len(l))
 #print(rle, len(rle))
