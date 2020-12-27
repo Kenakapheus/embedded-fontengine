@@ -5,6 +5,7 @@ import struct
 import argparse
 import logging
 import ColoredLogger
+import intelhex
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-f", "--font", default="LiberationSans-Regular.ttf", help="Fontfile Default:LiberationSans-Regular.ttf")
@@ -347,10 +348,11 @@ if args.output == "bin":
         f.write(fontFileImage)
         f.flush()
         f.close()
-elif args.output == "bin":
+elif args.output == "hex":
     with open(f"{output_filename}.hex", "w") as f:
-
-        f.write(":00000001FF")
+        ih = intelhex.IntelHex()
+        ih.puts(0x00, fontFileImage)
+        ih.write_hex_file(f)
         f.flush()
         f.close()
 
